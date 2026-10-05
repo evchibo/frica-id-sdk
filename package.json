@@ -1,6 +1,6 @@
 {
   "name": "@frica/id-sdk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Official TypeScript/JavaScript SDK for Sign in with Frica ID. OAuth 2.1 PKCE authorization, user management, and seamless authentication for Web and Node.js.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

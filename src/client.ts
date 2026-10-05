@@ -215,10 +215,11 @@ export class FricaClient {
       })
     });
 
-    const data = await res.json().catch(() => null);
+    const rawData = await res.json().catch(() => null);
+    const data = (rawData?.data && typeof rawData.data === 'object') ? rawData.data : rawData;
 
     if (!res.ok) {
-      const errorMsg = data?.error_description || data?.error || data?.message || 'Token exchange failed';
+      const errorMsg = data?.error_description || data?.error || data?.message || rawData?.message || 'Token exchange failed';
       throw new Error(errorMsg);
     }
 
@@ -258,7 +259,8 @@ export class FricaClient {
       })
     });
 
-    const data = await res.json().catch(() => null);
+    const rawData = await res.json().catch(() => null);
+    const data = (rawData?.data && typeof rawData.data === 'object') ? rawData.data : rawData;
 
     if (!res.ok) {
       await this.clearStorage();

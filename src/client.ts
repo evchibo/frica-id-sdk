@@ -306,7 +306,21 @@ export class FricaClient {
       throw new Error(data?.message || 'Failed to fetch user info');
     }
 
-    const user: FricaUser = data.data ?? data;
+    const raw = data.data ?? data ?? {};
+    const user: FricaUser = {
+      sub: String(raw.sub || raw.id || ''),
+      id: raw.id ? String(raw.id) : undefined,
+      name: String(raw.name || raw.preferred_username || raw.given_name || ''),
+      email: String(raw.email || raw.email_address || ''),
+      emailVerified: raw.email_verified === true || raw.emailVerified === true,
+      phoneNumber: raw.phone_number || raw.phoneNumber || raw.phone || undefined,
+      avatarUrl: raw.avatar_url || raw.avatarUrl || raw.picture || undefined,
+      picture: raw.picture || raw.avatar_url || raw.avatarUrl || undefined,
+      country: raw.country || undefined,
+      role: raw.role || undefined,
+      status: raw.status || undefined,
+      ...raw
+    };
     await this.storage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(user));
     return user;
   }

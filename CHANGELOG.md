@@ -2,7 +2,7 @@
 
 All notable changes to the Frica ID JavaScript/TypeScript SDK are documented here.
 
-## 1.1.0
+## 1.0.5
 
 - Added comprehensive KYC and identity verification support:
   - Added strongly-typed KYC claims on `FricaUser` (`kycStatus`, `kycTier`, `kycVerifiedAt`, `kycLegalFirstName`, `kycLegalLastName`, `kycDateOfBirth`, `kycNationality`, `kycCountryOfResidence`).

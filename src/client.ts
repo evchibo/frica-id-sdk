@@ -4,7 +4,12 @@ import {
   FricaUser,
   AuthorizeOptions,
   TokenStorage,
-  AuthResult
+  AuthResult,
+  KycStatus,
+  KycTier,
+  CreateKycSessionOptions,
+  KycSessionResult,
+  KycVerificationDetails
 } from './types.js';
 import {
   generateCodeVerifier,
@@ -321,6 +326,14 @@ export class FricaClient {
       country: raw.country || undefined,
       role: raw.role || undefined,
       status: raw.status || undefined,
+      kycStatus: (raw.kyc_status || raw.kycStatus) as KycStatus | undefined,
+      kycTier: (raw.kyc_tier || raw.kycTier) as KycTier | undefined,
+      kycVerifiedAt: raw.kyc_verified_at || raw.kycVerifiedAt || undefined,
+      kycLegalFirstName: raw.kyc_legal_first_name || raw.kycLegalFirstName || undefined,
+      kycLegalLastName: raw.kyc_legal_last_name || raw.kycLegalLastName || undefined,
+      kycDateOfBirth: raw.kyc_date_of_birth || raw.kycDateOfBirth || undefined,
+      kycNationality: raw.kyc_nationality || raw.kycNationality || undefined,
+      kycCountryOfResidence: raw.kyc_country_of_residence || raw.kycCountryOfResidence || undefined,
       ...raw
     };
     await this.storage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(user));
@@ -416,6 +429,85 @@ export class FricaClient {
       idToken,
       expiresAt: expiresAt ? parseInt(expiresAt, 10) : undefined
     };
+  }
+
+  /**
+   * Initiates a hosted KYC verification session.
+   * Requires an authenticated session or valid access token with 'kyc:write' scope.
+   */
+  async createKycSession(
+    options: CreateKycSessionOptions = {},
+    accessToken?: string
+  ): Promise<KycSessionResult> {
+    let token = accessToken;
+    if (!token) {
+      token = (await this.getValidAccessToken()) || undefined;
+    }
+    if (!token) {
+      throw new Error('Access token required to create KYC session');
+    }
+
+    const res = await fetch(`${this.issuerUrl}/v1/developer/kyc/sessions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(options)
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to create KYC session');
+    }
+
+    return data?.data ?? data;
+  }
+
+  /**
+   * Queries the KYC verification status and details for a given verification session ID.
+   */
+  async getKycVerification(
+    verificationId: string,
+    accessToken?: string
+  ): Promise<KycVerificationDetails> {
+    let token = accessToken;
+    if (!token) {
+      token = (await this.getValidAccessToken()) || undefined;
+    }
+    if (!token) {
+      throw new Error('Access token required to fetch KYC verification');
+    }
+
+    const res = await fetch(`${this.issuerUrl}/v1/developer/kyc/verifications/${verificationId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json'
+      }
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to fetch KYC verification');
+    }
+
+    return data?.data ?? data;
+  }
+
+  /**
+   * Opens the hosted KYC verification portal in a new browser tab/window or redirects.
+   */
+  launchKycVerification(hostedUrl: string, target: '_blank' | '_self' = '_blank'): void {
+    if (typeof window === 'undefined') {
+      throw new Error('launchKycVerification can only be used in a browser environment');
+    }
+    if (target === '_self') {
+      window.location.assign(hostedUrl);
+    } else {
+      window.open(hostedUrl, '_blank', 'noopener,noreferrer');
+    }
   }
 
   private async storeTokens(tokens: TokenResponse): Promise<void> {

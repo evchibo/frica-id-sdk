@@ -205,6 +205,80 @@ app.post('/api/verify', async (req, res) => {
 - `refreshToken()`: Refreshes access token with the refresh token.
 - `signOut()`: Revokes active tokens and clears client storage.
 - `isAuthenticated()`: Returns `true` if a valid session exists.
+- `createKycSession(options)`: Initiates a hosted KYC verification session.
+- `getKycVerification(verificationId)`: Fetches KYC verification status and verified claims.
+- `launchKycVerification(hostedUrl, target?)`: Opens verification flow in browser.
+
+---
+
+## 3. KYC & Identity Verification
+
+Frica ID supports tiered KYC verification (`TIER_1`, `TIER_2`, `TIER_3`) across African identity authorities.
+
+### Requesting KYC Claims in OAuth Flow
+
+Request `kyc.status` or `kyc.identity` in your scopes:
+
+```typescript
+const { url } = await fricaClient.getAuthorizationUrl({
+  scope: 'openid profile email kyc.status kyc.identity'
+});
+```
+
+The resulting `FricaUser` object contains verified claims:
+
+```typescript
+const user = await fricaClient.getUserInfo();
+console.log(user.kycStatus);           // 'APPROVED' | 'UNDER_REVIEW' | 'PENDING' | 'REJECTED'
+console.log(user.kycTier);             // 'TIER_2'
+console.log(user.kycLegalFirstName);   // 'Amina'
+console.log(user.kycLegalLastName);    // 'Bello'
+console.log(user.kycDateOfBirth);      // '1995-05-15'
+console.log(user.kycNationality);      // 'NG'
+```
+
+### Server-to-Server Developer KYC API
+
+For backend applications initiating hosted KYC verification or instant registry lookups:
+
+```typescript
+import {
+  createDeveloperKycSession,
+  getDeveloperKycVerification,
+  instantDeveloperKycCheck
+} from '@frica/id-sdk/node';
+
+// Create a hosted KYC verification session
+const session = await createDeveloperKycSession(
+  {
+    targetUserId: 'user_123',
+    requestedTier: 'TIER_2',
+    callbackUrl: 'https://myapp.com/kyc/callback'
+  },
+  { apiKey: process.env.FRICA_API_KEY }
+);
+
+console.log(session.hostedUrl); // Direct user to this URL for document capture
+
+// Check verification result
+const verification = await getDeveloperKycVerification(
+  session.sessionId,
+  { apiKey: process.env.FRICA_API_KEY }
+);
+
+// Instant verification against national registries (e.g. BVN, NIN)
+const result = await instantDeveloperKycCheck(
+  {
+    country: 'NG',
+    idType: 'BVN',
+    idNumber: '12345678901',
+    firstName: 'Amina',
+    lastName: 'Bello',
+    dateOfBirth: '1995-05-15'
+  },
+  { apiKey: process.env.FRICA_API_KEY }
+);
+```
 
 ---
 

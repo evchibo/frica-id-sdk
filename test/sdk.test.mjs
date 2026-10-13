@@ -69,3 +69,49 @@ test('MemoryStorage set, get, and delete operations', async () => {
   await storage.removeItem('test_key');
   assert.strictEqual(await storage.getItem('test_key'), null);
 });
+
+test('FricaClient properly extracts and maps KYC claims from userinfo endpoint', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url) => {
+      if (url.toString().includes('/oauth/userinfo')) {
+        return {
+          ok: true,
+          json: async () => ({
+            sub: 'frica_user_123',
+            name: 'Amina Bello',
+            email: 'amina@example.com',
+            email_verified: true,
+            kyc_status: 'APPROVED',
+            kyc_tier: 'TIER_2',
+            kyc_verified_at: '2026-10-13T12:00:00Z',
+            kyc_legal_first_name: 'Amina',
+            kyc_legal_last_name: 'Bello',
+            kyc_date_of_birth: '1995-05-15',
+            kyc_nationality: 'NG',
+            kyc_country_of_residence: 'NG'
+          })
+        };
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    };
+
+    const client = createFricaClient({
+      clientId: 'fcli_test_123',
+      redirectUri: 'https://myapp.com/callback',
+      storage: new MemoryStorage()
+    });
+
+    const user = await client.getUserInfo('mock_access_token');
+    assert.strictEqual(user.sub, 'frica_user_123');
+    assert.strictEqual(user.name, 'Amina Bello');
+    assert.strictEqual(user.kycStatus, 'APPROVED');
+    assert.strictEqual(user.kycTier, 'TIER_2');
+    assert.strictEqual(user.kycVerifiedAt, '2026-10-13T12:00:00Z');
+    assert.strictEqual(user.kycLegalFirstName, 'Amina');
+    assert.strictEqual(user.kycLegalLastName, 'Bello');
+    assert.strictEqual(user.kycNationality, 'NG');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -51,6 +51,16 @@ export interface TokenResponse {
 }
 
 /**
+ * KYC verification status.
+ */
+export type KycStatus = 'NOT_STARTED' | 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+
+/**
+ * KYC verification tier level.
+ */
+export type KycTier = 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3';
+
+/**
  * Authenticated Frica User Profile Claims.
  */
 export interface FricaUser {
@@ -69,7 +79,138 @@ export interface FricaUser {
   role?: string;
   status?: string;
   createdAt?: string;
+
+  /**
+   * KYC Verification Status (returned when 'kyc.status' or 'kyc:read' scope is requested).
+   */
+  kycStatus?: KycStatus;
+
+  /**
+   * Verified KYC Tier level (e.g. TIER_0, TIER_1, TIER_2, TIER_3).
+   */
+  kycTier?: KycTier;
+
+  /**
+   * Timestamp when KYC verification was approved.
+   */
+  kycVerifiedAt?: string;
+
+  /**
+   * Legal first name from verified government ID (requires 'kyc.identity' scope).
+   */
+  kycLegalFirstName?: string;
+
+  /**
+   * Legal last name from verified government ID (requires 'kyc.identity' scope).
+   */
+  kycLegalLastName?: string;
+
+  /**
+   * Date of birth from verified identity document (requires 'kyc.identity' scope).
+   */
+  kycDateOfBirth?: string;
+
+  /**
+   * Verified nationality ISO country code (requires 'kyc.identity' scope).
+   */
+  kycNationality?: string;
+
+  /**
+   * Verified country of residence ISO country code (requires 'kyc.identity' scope).
+   */
+  kycCountryOfResidence?: string;
+
   [key: string]: any;
+}
+
+/**
+ * Parameters for creating a hosted developer KYC session.
+ */
+export interface CreateKycSessionOptions {
+  /**
+   * Target Frica user ID or client-specific external user reference.
+   */
+  targetUserId?: string;
+
+  /**
+   * Desired KYC verification tier. Defaults to TIER_2 if unspecified.
+   */
+  requestedTier?: 'TIER_1' | 'TIER_2' | 'TIER_3';
+
+  /**
+   * Optional custom webhook or redirect callback URL upon completion.
+   */
+  callbackUrl?: string;
+}
+
+/**
+ * Response from initiating a hosted KYC verification session.
+ */
+export interface KycSessionResult {
+  sessionId: string;
+  clientSecret: string;
+  hostedUrl: string;
+  expiresAt: string;
+  targetUserId?: string;
+  requestedTier?: string;
+}
+
+/**
+ * Detailed KYC verification outcome and extracted claims.
+ */
+export interface KycVerificationDetails {
+  verificationId: string;
+  userId: string;
+  status: KycStatus;
+  tier: KycTier;
+  submittedAt?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+  claims?: {
+    legalFirstName?: string;
+    legalLastName?: string;
+    dateOfBirth?: string;
+    nationality?: string;
+    country?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+/**
+ * Request payload for instant server-to-server KYC identity verification.
+ */
+export interface InstantCheckOptions {
+  country: string;
+  idType: 'BVN' | 'NIN' | string;
+  idNumber: string;
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+}
+
+/**
+ * Result returned from an instant KYC check against official identity registries.
+ */
+export interface InstantCheckResult {
+  verified: boolean;
+  confidenceScore?: number;
+  matchDetails?: {
+    nameMatched?: boolean;
+    dobMatched?: boolean;
+    [key: string]: any;
+  };
+  providerReference?: string;
+  [key: string]: any;
+}
+
+/**
+ * Authentication options for developer KYC API queries.
+ */
+export interface DeveloperAuthOptions {
+  apiKey?: string;
+  accessToken?: string;
+  issuerUrl?: string;
 }
 
 /**

@@ -1,4 +1,12 @@
-import { FricaUser } from './types.js';
+import {
+  FricaUser,
+  CreateKycSessionOptions,
+  KycSessionResult,
+  KycVerificationDetails,
+  InstantCheckOptions,
+  InstantCheckResult,
+  DeveloperAuthOptions
+} from './types.js';
 
 export interface TokenVerificationOptions {
   issuerUrl?: string;
@@ -73,7 +81,31 @@ export async function getUserFromToken(
 
   if (!res.ok) return null;
   const data = await res.json().catch(() => null);
-  return data?.data ?? data;
+  const raw = data?.data ?? data;
+  if (!raw) return null;
+
+  return {
+    sub: String(raw.sub || raw.id || ''),
+    id: raw.id ? String(raw.id) : undefined,
+    name: String(raw.name || raw.preferred_username || raw.given_name || ''),
+    email: String(raw.email || raw.email_address || ''),
+    emailVerified: raw.email_verified === true || raw.emailVerified === true,
+    phoneNumber: raw.phone_number || raw.phoneNumber || raw.phone || undefined,
+    avatarUrl: raw.avatar_url || raw.avatarUrl || raw.picture || undefined,
+    picture: raw.picture || raw.avatar_url || raw.avatarUrl || undefined,
+    country: raw.country || undefined,
+    role: raw.role || undefined,
+    status: raw.status || undefined,
+    kycStatus: raw.kyc_status || raw.kycStatus || undefined,
+    kycTier: raw.kyc_tier || raw.kycTier || undefined,
+    kycVerifiedAt: raw.kyc_verified_at || raw.kycVerifiedAt || undefined,
+    kycLegalFirstName: raw.kyc_legal_first_name || raw.kycLegalFirstName || undefined,
+    kycLegalLastName: raw.kyc_legal_last_name || raw.kycLegalLastName || undefined,
+    kycDateOfBirth: raw.kyc_date_of_birth || raw.kycDateOfBirth || undefined,
+    kycNationality: raw.kyc_nationality || raw.kycNationality || undefined,
+    kycCountryOfResidence: raw.kyc_country_of_residence || raw.kycCountryOfResidence || undefined,
+    ...raw
+  };
 }
 
 /**
@@ -103,4 +135,107 @@ export function fricaAuthMiddleware(options: {
     req.fricaToken = token;
     next();
   };
+}
+
+/**
+ * Creates a hosted developer KYC session via server API key or access token.
+ */
+export async function createDeveloperKycSession(
+  options: CreateKycSessionOptions,
+  auth: DeveloperAuthOptions
+): Promise<KycSessionResult> {
+  const issuerUrl = (auth.issuerUrl || 'https://api.frica.id').replace(/\/+$/, '');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json'
+  };
+
+  if (auth.apiKey) {
+    headers['x-api-key'] = auth.apiKey;
+  } else if (auth.accessToken) {
+    headers['Authorization'] = `Bearer ${auth.accessToken}`;
+  } else {
+    throw new Error('Either apiKey or accessToken must be provided for developer KYC session creation');
+  }
+
+  const res = await fetch(`${issuerUrl}/v1/developer/kyc/sessions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(options)
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || 'Failed to create KYC session');
+  }
+
+  return data?.data ?? data;
+}
+
+/**
+ * Queries KYC verification status and details by verification session ID.
+ */
+export async function getDeveloperKycVerification(
+  verificationId: string,
+  auth: DeveloperAuthOptions
+): Promise<KycVerificationDetails> {
+  const issuerUrl = (auth.issuerUrl || 'https://api.frica.id').replace(/\/+$/, '');
+  const headers: Record<string, string> = {
+    Accept: 'application/json'
+  };
+
+  if (auth.apiKey) {
+    headers['x-api-key'] = auth.apiKey;
+  } else if (auth.accessToken) {
+    headers['Authorization'] = `Bearer ${auth.accessToken}`;
+  } else {
+    throw new Error('Either apiKey or accessToken must be provided');
+  }
+
+  const res = await fetch(`${issuerUrl}/v1/developer/kyc/verifications/${verificationId}`, {
+    method: 'GET',
+    headers
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || 'Failed to fetch KYC verification');
+  }
+
+  return data?.data ?? data;
+}
+
+/**
+ * Runs an instant server-to-server KYC check (e.g. BVN, NIN) against official registries.
+ */
+export async function instantDeveloperKycCheck(
+  input: InstantCheckOptions,
+  auth: DeveloperAuthOptions
+): Promise<InstantCheckResult> {
+  const issuerUrl = (auth.issuerUrl || 'https://api.frica.id').replace(/\/+$/, '');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json'
+  };
+
+  if (auth.apiKey) {
+    headers['x-api-key'] = auth.apiKey;
+  } else if (auth.accessToken) {
+    headers['Authorization'] = `Bearer ${auth.accessToken}`;
+  } else {
+    throw new Error('Either apiKey or accessToken must be provided');
+  }
+
+  const res = await fetch(`${issuerUrl}/v1/developer/kyc/instant-check`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(input)
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || 'Failed to perform instant KYC check');
+  }
+
+  return data?.data ?? data;
 }

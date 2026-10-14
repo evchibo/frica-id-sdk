@@ -133,14 +133,48 @@ export interface CreateKycSessionOptions {
   targetUserId?: string;
 
   /**
+   * Customer identification details.
+   */
+  customer?: {
+    externalUserId: string;
+    email?: string;
+    name?: string;
+  };
+
+  /**
    * Desired KYC verification tier. Defaults to TIER_2 if unspecified.
    */
   requestedTier?: 'TIER_1' | 'TIER_2' | 'TIER_3';
 
   /**
-   * Optional custom webhook or redirect callback URL upon completion.
+   * Return URL after user completes or exits the KYC verification flow.
+   */
+  returnUrl?: string;
+
+  /**
+   * Optional custom webhook or redirect callback URL (alias for returnUrl).
    */
   callbackUrl?: string;
+
+  /**
+   * Optional URL to redirect if applicant cancels verification.
+   */
+  cancelUrl?: string;
+
+  /**
+   * Custom developer tracking reference.
+   */
+  customReference?: string;
+
+  /**
+   * Allowed document types for this session.
+   */
+  allowedDocumentTypes?: ('PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE' | 'VOTER_ID' | 'RESIDENCE_PERMIT')[];
+
+  /**
+   * Arbitrary metadata stored with this session.
+   */
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -150,9 +184,12 @@ export interface KycSessionResult {
   sessionId: string;
   clientSecret: string;
   hostedUrl: string;
+  sessionUrl?: string;
   expiresAt: string;
   targetUserId?: string;
   requestedTier?: string;
+  applicationId?: string;
+  applicationName?: string;
 }
 
 /**
@@ -182,8 +219,10 @@ export interface KycVerificationDetails {
  */
 export interface InstantCheckOptions {
   country: string;
-  idType: 'BVN' | 'NIN' | string;
-  idNumber: string;
+  idType?: 'BVN' | 'NIN' | 'PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE' | string;
+  idNumber?: string;
+  documentType?: 'PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE' | 'VOTER_ID' | 'RESIDENCE_PERMIT' | string;
+  documentNumber?: string;
   firstName?: string;
   lastName?: string;
   dateOfBirth?: string;
@@ -195,6 +234,11 @@ export interface InstantCheckOptions {
 export interface InstantCheckResult {
   verified: boolean;
   confidenceScore?: number;
+  matchConfidence?: number;
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  watchlistHit?: boolean;
+  mrzValid?: boolean;
+  message?: string;
   matchDetails?: {
     nameMatched?: boolean;
     dobMatched?: boolean;
@@ -254,4 +298,111 @@ export interface AuthResult {
   tokens: TokenResponse;
   user: FricaUser;
   state?: string;
+}
+
+/**
+ * Sovereign Frica Wallet holding FRICA tokens (1 FRICA = 1 USD).
+ */
+export interface FricaWallet {
+  id: string;
+  ownerId: string;
+  ownerType: 'USER' | 'DEVELOPER_ORG';
+  currency: string;
+  availableBalance: number;
+  lockedBalance: number;
+  totalToppedUp: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Payment rails supported for wallet top-up and token acquisition.
+ */
+export type WalletPaymentRail =
+  | 'CARD'
+  | 'MOBILE_MONEY'
+  | 'BANK_TRANSFER'
+  | 'CRYPTO'
+  | 'TOKEN_BALANCE'
+  | 'SANDBOX'
+  | 'MOCK'
+  | string;
+
+/**
+ * Frica Wallet Ledger Transaction.
+ */
+export interface FricaWalletTransaction {
+  id: string;
+  walletId: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  type: 'TOPUP' | 'PAYMENT' | 'KYC_DEDUCTION' | 'REFUND' | 'BONUS_GRANT' | string;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | string;
+  reference: string;
+  paymentMethod?: WalletPaymentRail;
+  description?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
+
+/**
+ * Options for topping up Frica Tokens in a developer or user wallet.
+ */
+export interface WalletTopupOptions {
+  /**
+   * Amount in USD to top up (converts 1:1 to FRICA tokens plus tiered bonuses).
+   */
+  amountUsd: number;
+
+  /**
+   * Payment rail. Use 'SANDBOX' or 'MOCK' when testing with admin/sandbox credentials.
+   */
+  paymentMethod: WalletPaymentRail;
+
+  /**
+   * Mobile Money provider (e.g. 'MPESA', 'MTN_MOMO', 'ORANGE_MONEY', 'AIRTEL_MONEY') if paymentMethod is MOBILE_MONEY.
+   */
+  mobileMoneyProvider?: string;
+
+  /**
+   * Phone number in international format (+234, +254, etc.) for Mobile Money STK push.
+   */
+  phoneNumber?: string;
+
+  /**
+   * Optional payment reference from gateway.
+   */
+  paymentReference?: string;
+
+  /**
+   * Whether to run in sandbox simulation mode.
+   */
+  isSandbox?: boolean;
+}
+
+/**
+ * Options for paying for services using token balance.
+ */
+export interface PayServiceWithTokensOptions {
+  serviceType: 'PRO_SUBSCRIPTION' | 'PRO_PLUS_SUBSCRIPTION' | 'BUSINESS_SUBSCRIPTION' | string;
+  tier?: 'PRO' | 'PRO_PLUS' | 'BUSINESS' | string;
+  amountTokens?: number;
+}
+
+/**
+ * Public Digital Passport authenticity verification result.
+ */
+export interface DigitalPassportVerificationResult {
+  verified: boolean;
+  identifier: string;
+  fullName?: string;
+  country?: string;
+  status?: string;
+  tier?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+  qrVerified?: boolean;
+  message?: string;
+  [key: string]: any;
 }

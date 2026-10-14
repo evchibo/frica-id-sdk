@@ -282,6 +282,49 @@ const result = await instantDeveloperKycCheck(
 
 ---
 
+## 4. Wallet & Token Management (`FRICA` Tokens)
+
+Frica ID integrates a sovereign token system (**1 FRICA = 1 USD**). Commercial verification checks cost **0.45 FRICA** per verification from developer organization wallets. Individual users can top up tokens to pay for subscription upgrades (`PRO`, `PRO_PLUS`, `BUSINESS`).
+
+### Query Developer Wallet & Verification Runway
+
+```typescript
+import { getDeveloperWallet, topupDeveloperWallet } from '@frica/id-sdk/node';
+
+// Query organization wallet balance and remaining checks
+const wallet = await getDeveloperWallet({ apiKey: process.env.FRICA_API_KEY });
+console.log(`Available Balance: ${wallet.availableBalance} FRICA`);
+console.log(`Remaining KYC checks: ${Math.floor(wallet.availableBalance / 0.45)}`);
+
+// Top up developer wallet via Mobile Money (M-Pesa, MTN MoMo) or Card
+const topup = await topupDeveloperWallet(
+  {
+    amountUsd: 100,
+    paymentMethod: 'MOBILE_MONEY',
+    mobileMoneyProvider: 'MPESA',
+    phoneNumber: '+254712345678'
+  },
+  { apiKey: process.env.FRICA_API_KEY }
+);
+
+console.log(`New balance: ${topup.wallet.availableBalance} FRICA (includes bonus tokens)`);
+```
+
+### Digital Passport Authenticity Verification
+
+Verify the public validity and anti-tamper authenticity of any Frica ID Digital Passport identifier or scanned QR code:
+
+```typescript
+import { verifyDigitalPassport } from '@frica/id-sdk/node';
+
+const result = await verifyDigitalPassport('FRICA-PASSPORT-KWAME-001');
+if (result.verified) {
+  console.log(`Verified Passport Holder: ${result.fullName} (${result.country})`);
+}
+```
+
+---
+
 ## License
 
 Apache-2.0 © Frica ID Team

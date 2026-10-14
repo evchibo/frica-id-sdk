@@ -5,7 +5,10 @@ import {
   KycVerificationDetails,
   InstantCheckOptions,
   InstantCheckResult,
-  DeveloperAuthOptions
+  DeveloperAuthOptions,
+  FricaWallet,
+  WalletTopupOptions,
+  DigitalPassportVerificationResult
 } from './types.js';
 
 export interface TokenVerificationOptions {
@@ -158,10 +161,23 @@ export async function createDeveloperKycSession(
     throw new Error('Either apiKey or accessToken must be provided for developer KYC session creation');
   }
 
+  // Gracefully format body to adhere to API schema
+  const payload = {
+    requestedTier: options.requestedTier || 'TIER_2',
+    returnUrl: options.returnUrl || options.callbackUrl || 'https://frica.id/callback',
+    cancelUrl: options.cancelUrl,
+    customReference: options.customReference,
+    allowedDocumentTypes: options.allowedDocumentTypes,
+    customer: options.customer || {
+      externalUserId: options.targetUserId || `ext_${Date.now()}`
+    },
+    metadata: options.metadata
+  };
+
   const res = await fetch(`${issuerUrl}/v1/developer/kyc/sessions`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(options)
+    body: JSON.stringify(payload)
   });
 
   const data = await res.json().catch(() => null);
@@ -169,7 +185,11 @@ export async function createDeveloperKycSession(
     throw new Error(data?.message || data?.error || 'Failed to create KYC session');
   }
 
-  return data?.data ?? data;
+  const raw = data?.data ?? data;
+  return {
+    ...raw,
+    hostedUrl: raw.sessionUrl || raw.hostedUrl
+  };
 }
 
 /**
@@ -206,7 +226,7 @@ export async function getDeveloperKycVerification(
 }
 
 /**
- * Runs an instant server-to-server KYC check (e.g. BVN, NIN) against official registries.
+ * Runs an instant server-to-server KYC check (e.g. BVN, NIN, Passport) against official registries.
  */
 export async function instantDeveloperKycCheck(
   input: InstantCheckOptions,
@@ -226,15 +246,117 @@ export async function instantDeveloperKycCheck(
     throw new Error('Either apiKey or accessToken must be provided');
   }
 
+  const payload = {
+    country: input.country,
+    documentType: input.documentType || (input.idType === 'NIN' || input.idType === 'BVN' ? 'NATIONAL_ID' : input.idType) || 'NATIONAL_ID',
+    documentNumber: input.documentNumber || input.idNumber || '000000',
+    firstName: input.firstName || 'Verified',
+    lastName: input.lastName || 'User',
+    dateOfBirth: input.dateOfBirth || '1990-01-01',
+    idType: input.idType,
+    idNumber: input.idNumber
+  };
+
   const res = await fetch(`${issuerUrl}/v1/developer/kyc/instant-check`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(input)
+    body: JSON.stringify(payload)
   });
 
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     throw new Error(data?.message || data?.error || 'Failed to perform instant KYC check');
+  }
+
+  return data?.data ?? data;
+}
+
+/**
+ * Retrieves the developer organization token wallet and remaining verification runway.
+ */
+export async function getDeveloperWallet(
+  auth: DeveloperAuthOptions
+): Promise<FricaWallet> {
+  const issuerUrl = (auth.issuerUrl || 'https://api.frica.id').replace(/\/+$/, '');
+  const headers: Record<string, string> = {
+    Accept: 'application/json'
+  };
+
+  if (auth.apiKey) {
+    headers['x-api-key'] = auth.apiKey;
+  } else if (auth.accessToken) {
+    headers['Authorization'] = `Bearer ${auth.accessToken}`;
+  } else {
+    throw new Error('Either apiKey or accessToken must be provided');
+  }
+
+  const res = await fetch(`${issuerUrl}/v1/developer/wallet`, {
+    method: 'GET',
+    headers
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || 'Failed to fetch developer wallet');
+  }
+
+  return data?.wallet ?? data?.data ?? data;
+}
+
+/**
+ * Tops up Frica Tokens in the developer organization wallet.
+ */
+export async function topupDeveloperWallet(
+  options: WalletTopupOptions,
+  auth: DeveloperAuthOptions
+): Promise<{ success: boolean; wallet: FricaWallet; bonusTokens?: number }> {
+  const issuerUrl = (auth.issuerUrl || 'https://api.frica.id').replace(/\/+$/, '');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json'
+  };
+
+  if (auth.apiKey) {
+    headers['x-api-key'] = auth.apiKey;
+  } else if (auth.accessToken) {
+    headers['Authorization'] = `Bearer ${auth.accessToken}`;
+  } else {
+    throw new Error('Either apiKey or accessToken must be provided');
+  }
+
+  const res = await fetch(`${issuerUrl}/v1/developer/wallet/topup`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(options)
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || 'Failed to top up developer wallet');
+  }
+
+  return data?.data ?? data;
+}
+
+/**
+ * Verifies public authenticity of a digital passport identifier or QR code.
+ */
+export async function verifyDigitalPassport(
+  identifier: string,
+  issuerUrl: string = 'https://api.frica.id'
+): Promise<DigitalPassportVerificationResult> {
+  const base = issuerUrl.replace(/\/+$/, '');
+  const res = await fetch(`${base}/v1/kyc/passport/verify/${encodeURIComponent(identifier)}`, {
+    headers: { Accept: 'application/json' }
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    return {
+      verified: false,
+      identifier,
+      message: data?.message || 'Digital passport authenticity verification failed'
+    };
   }
 
   return data?.data ?? data;

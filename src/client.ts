@@ -9,7 +9,11 @@ import {
   KycTier,
   CreateKycSessionOptions,
   KycSessionResult,
-  KycVerificationDetails
+  KycVerificationDetails,
+  FricaWallet,
+  WalletTopupOptions,
+  PayServiceWithTokensOptions,
+  DigitalPassportVerificationResult
 } from './types.js';
 import {
   generateCodeVerifier,
@@ -447,6 +451,19 @@ export class FricaClient {
       throw new Error('Access token required to create KYC session');
     }
 
+    // Gracefully format body to adhere to API schema
+    const payload = {
+      requestedTier: options.requestedTier || 'TIER_2',
+      returnUrl: options.returnUrl || options.callbackUrl || (typeof window !== 'undefined' ? window.location.href : 'https://frica.id/callback'),
+      cancelUrl: options.cancelUrl,
+      customReference: options.customReference,
+      allowedDocumentTypes: options.allowedDocumentTypes,
+      customer: options.customer || {
+        externalUserId: options.targetUserId || `ext_${Date.now()}`
+      },
+      metadata: options.metadata
+    };
+
     const res = await fetch(`${this.issuerUrl}/v1/developer/kyc/sessions`, {
       method: 'POST',
       headers: {
@@ -454,7 +471,7 @@ export class FricaClient {
         'Content-Type': 'application/json',
         Accept: 'application/json'
       },
-      body: JSON.stringify(options)
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json().catch(() => null);
@@ -462,7 +479,11 @@ export class FricaClient {
       throw new Error(data?.message || data?.error || 'Failed to create KYC session');
     }
 
-    return data?.data ?? data;
+    const raw = data?.data ?? data;
+    return {
+      ...raw,
+      hostedUrl: raw.sessionUrl || raw.hostedUrl
+    };
   }
 
   /**
@@ -508,6 +529,120 @@ export class FricaClient {
     } else {
       window.open(hostedUrl, '_blank', 'noopener,noreferrer');
     }
+  }
+
+  /**
+   * Retrieves the authenticated user's sovereign token wallet.
+   */
+  async getUserWallet(accessToken?: string): Promise<FricaWallet> {
+    let token = accessToken;
+    if (!token) {
+      token = (await this.getValidAccessToken()) || undefined;
+    }
+    if (!token) {
+      throw new Error('Access token required to fetch wallet');
+    }
+
+    const res = await fetch(`${this.issuerUrl}/v1/wallet`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json'
+      }
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to fetch user wallet');
+    }
+
+    return data?.wallet ?? data?.data ?? data;
+  }
+
+  /**
+   * Tops up Frica Tokens in the user's wallet via supported payment rails.
+   */
+  async topupUserWallet(
+    options: WalletTopupOptions,
+    accessToken?: string
+  ): Promise<{ success: boolean; wallet: FricaWallet; bonusTokens?: number }> {
+    let token = accessToken;
+    if (!token) {
+      token = (await this.getValidAccessToken()) || undefined;
+    }
+    if (!token) {
+      throw new Error('Access token required to top up wallet');
+    }
+
+    const res = await fetch(`${this.issuerUrl}/v1/wallet/topup`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(options)
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to top up user wallet');
+    }
+
+    return data?.data ?? data;
+  }
+
+  /**
+   * Pays for account tiers or services using Frica Token balance.
+   */
+  async payServiceWithTokens(
+    options: PayServiceWithTokensOptions,
+    accessToken?: string
+  ): Promise<{ success: boolean; wallet: FricaWallet }> {
+    let token = accessToken;
+    if (!token) {
+      token = (await this.getValidAccessToken()) || undefined;
+    }
+    if (!token) {
+      throw new Error('Access token required to pay with tokens');
+    }
+
+    const res = await fetch(`${this.issuerUrl}/v1/wallet/pay-service`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(options)
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.message || data?.error || 'Payment with tokens failed');
+    }
+
+    return data?.data ?? data;
+  }
+
+  /**
+   * Verifies authenticity of a digital passport identifier or QR code.
+   */
+  async verifyDigitalPassport(identifier: string): Promise<DigitalPassportVerificationResult> {
+    const res = await fetch(`${this.issuerUrl}/v1/kyc/passport/verify/${encodeURIComponent(identifier)}`, {
+      headers: { Accept: 'application/json' }
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      return {
+        verified: false,
+        identifier,
+        message: data?.message || 'Digital passport authenticity verification failed'
+      };
+    }
+
+    return data?.data ?? data;
   }
 
   private async storeTokens(tokens: TokenResponse): Promise<void> {

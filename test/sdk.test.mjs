@@ -115,3 +115,142 @@ test('FricaClient properly extracts and maps KYC claims from userinfo endpoint',
     globalThis.fetch = originalFetch;
   }
 });
+
+test('Developer Wallet and KYC token methods in Node.js SDK', async () => {
+  const { getDeveloperWallet, topupDeveloperWallet, verifyDigitalPassport } = await import('../dist/index.js');
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async (url, options) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/v1/developer/wallet/topup')) {
+        const body = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            bonusTokens: 5,
+            wallet: {
+              id: 'wal_dev_99',
+              ownerId: 'app_123',
+              ownerType: 'DEVELOPER_ORG',
+              currency: 'FRICA',
+              availableBalance: body.amountUsd + 5,
+              lockedBalance: 0,
+              totalToppedUp: body.amountUsd
+            }
+          })
+        };
+      }
+      if (urlStr.includes('/v1/developer/wallet')) {
+        return {
+          ok: true,
+          json: async () => ({
+            wallet: {
+              id: 'wal_dev_99',
+              ownerId: 'app_123',
+              ownerType: 'DEVELOPER_ORG',
+              currency: 'FRICA',
+              availableBalance: 45.0,
+              lockedBalance: 0,
+              totalToppedUp: 50.0
+            }
+          })
+        };
+      }
+      if (urlStr.includes('/v1/kyc/passport/verify/FRICA-PASSPORT-12345')) {
+        return {
+          ok: true,
+          json: async () => ({
+            verified: true,
+            identifier: 'FRICA-PASSPORT-12345',
+            fullName: 'Kwame Mensah',
+            country: 'GH',
+            status: 'APPROVED'
+          })
+        };
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    };
+
+    const wallet = await getDeveloperWallet({ apiKey: 'fkey_live_test_123' });
+    assert.strictEqual(wallet.availableBalance, 45.0);
+    assert.strictEqual(wallet.currency, 'FRICA');
+
+    const topup = await topupDeveloperWallet({
+      amountUsd: 100,
+      paymentMethod: 'MOBILE_MONEY',
+      mobileMoneyProvider: 'MPESA'
+    }, { apiKey: 'fkey_live_test_123' });
+    assert.strictEqual(topup.success, true);
+    assert.strictEqual(topup.bonusTokens, 5);
+    assert.strictEqual(topup.wallet.availableBalance, 105);
+
+    const passport = await verifyDigitalPassport('FRICA-PASSPORT-12345');
+    assert.strictEqual(passport.verified, true);
+    assert.strictEqual(passport.fullName, 'Kwame Mensah');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('FricaClient user wallet and token operations', async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async (url, options) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/v1/wallet/pay-service')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            wallet: {
+              id: 'wal_usr_11',
+              availableBalance: 20.01,
+              currency: 'FRICA'
+            }
+          })
+        };
+      }
+      if (urlStr.includes('/v1/wallet')) {
+        return {
+          ok: true,
+          json: async () => ({
+            wallet: {
+              id: 'wal_usr_11',
+              ownerId: 'frica_usr_11',
+              ownerType: 'USER',
+              currency: 'FRICA',
+              availableBalance: 25.0,
+              lockedBalance: 0,
+              totalToppedUp: 25.0
+            }
+          })
+        };
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    };
+
+    const storage = new MemoryStorage();
+    await storage.setItem('frica_access_token', 'mock_token_abc');
+
+    const client = createFricaClient({
+      clientId: 'fcli_test_123',
+      redirectUri: 'https://myapp.com/callback',
+      storage
+    });
+
+    const wallet = await client.getUserWallet();
+    assert.strictEqual(wallet.availableBalance, 25.0);
+
+    const payResult = await client.payServiceWithTokens({
+      serviceType: 'PRO_SUBSCRIPTION',
+      amountTokens: 4.99
+    });
+    assert.strictEqual(payResult.success, true);
+    assert.strictEqual(payResult.wallet.availableBalance, 20.01);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

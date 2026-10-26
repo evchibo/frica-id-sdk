@@ -65,9 +65,11 @@ export type KycTier = 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3';
  */
 export interface FricaUser {
   /**
-   * Unique subject identifier prefixed with frica_ (e.g. frica_00c2...).
+   * Opaque OAuth subject used to match accounts. Do not infer its format or use it for public display.
    */
   sub: string;
+  /** Public Frica ID (for example FID-7K9MX4QP2N8C), returned with the profile scope. */
+  publicId?: string;
   id?: string;
   name: string;
   email: string;
@@ -406,3 +408,4 @@ export interface DigitalPassportVerificationResult {
   message?: string;
   [key: string]: any;
 }
+

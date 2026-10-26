@@ -338,7 +338,10 @@ export class FricaClient {
       kycDateOfBirth: raw.kyc_date_of_birth || raw.kycDateOfBirth || undefined,
       kycNationality: raw.kyc_nationality || raw.kycNationality || undefined,
       kycCountryOfResidence: raw.kyc_country_of_residence || raw.kycCountryOfResidence || undefined,
-      ...raw
+      ...raw,
+      publicId: typeof raw.public_id === 'string' && raw.public_id.length > 0
+        ? raw.public_id
+        : typeof raw.publicId === 'string' && raw.publicId.length > 0 ? raw.publicId : undefined
     };
     await this.storage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(user));
     return user;
@@ -675,3 +678,4 @@ export class FricaClient {
 export function createFricaClient(config: FricaConfig): FricaClient {
   return new FricaClient(config);
 }
+

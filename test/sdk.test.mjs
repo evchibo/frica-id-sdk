@@ -254,3 +254,28 @@ test('FricaClient user wallet and token operations', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('UserInfo exposes optional Public Frica ID without changing the OAuth subject', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    const subject = 'usr_opaque_account_reference';
+    for (const [claims, expected] of [
+      [{ public_id: 'FID-7K9MX4QP2N8C' }, 'FID-7K9MX4QP2N8C'],
+      [{ publicId: 'FID-7K9MX4QP2N8C' }, 'FID-7K9MX4QP2N8C'],
+      [{ public_id: 'FID-7K9MX4QP2N8C', publicId: 'stale-alias' }, 'FID-7K9MX4QP2N8C'],
+      [{}, undefined],
+      [{ public_id: 42, publicId: false }, undefined],
+    ]) {
+      const storage = new MemoryStorage();
+      const client = createFricaClient({ clientId: 'test-public-id', redirectUri: 'https://example.test/callback', storage });
+      const picture = 'https://api.frica.id/users/FID-7K9MX4QP2N8C/avatar';
+      globalThis.fetch = async () => ({ ok: true, json: async () => ({ sub: subject, name: 'Frica member', picture, ...claims }) });
+      const user = await client.getUserInfo('test-access-token');
+      assert.equal(user.publicId, expected);
+      assert.equal(user.sub, subject);
+      assert.equal(user.avatarUrl, picture);
+      assert.equal((await client.getUser()).publicId, expected);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});

@@ -7,6 +7,17 @@ The official TypeScript/JavaScript SDK for **Sign in with Frica ID**. Implements
 
 ---
 
+## Public Frica ID
+
+With the `profile` scope, the user profile exposes an optional `publicId`, such as `FID-7K9MX4QP2N8C`. Use it for public account labels. Continue using the opaque `sub` to match authenticated accounts; its format must not be assumed. Profiles from older servers or without the claim remain supported.
+
+```typescript
+const user = await client.getUserInfo();
+console.log(user.publicId ?? user.name);
+```
+
+The OAuth token endpoint's HTTP 200 response and compact `picture` URL already work with the SDK. Avatar images are fetched using the returned URL rather than embedded in ID tokens.
+
 ## Features
 
 - 🔐 **OAuth 2.1 PKCE by Default:** Full RFC 7636 security. No client secrets required on the frontend.
@@ -328,3 +339,4 @@ if (result.verified) {
 ## License
 
 Apache-2.0 © Frica ID Team
+
